@@ -91,23 +91,19 @@ class LoginRegisterApp(QMainWindow):
     def init_db(self):
         self.conn = sqlite3.connect('productivity_app.db')
         self.cursor = self.conn.cursor()
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            )
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                task TEXT NOT NULL,
-                completed BOOLEAN DEFAULT 0,
-                is_available BOOLEAN DEFAULT 1,  -- New field for soft delete
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        ''')
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )''')
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            task TEXT NOT NULL,
+            completed BOOLEAN DEFAULT 0,
+            is_available BOOLEAN DEFAULT 1, 
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )''')
         self.conn.commit()
 
     def show_login_ui(self):
@@ -142,7 +138,6 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Registration Failed", "Username already exists")
 
     def show_productivity_app(self):
-        # Always show the productivity app, regardless of whether tasks exist or not
         self.productivity_app = ProductivityApp(self.user_id, self.conn)
         self.setCentralWidget(self.productivity_app)
 
@@ -161,10 +156,9 @@ class ProductivityApp(QWidget):
         # Timer to update screen time
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_screen_time)
-        self.timer.start(1000)  # Update every second
+        self.timer.start(1000)
 
     def init_ui(self):
-        # Main layout
         main_layout = QVBoxLayout()
 
         # Add header
@@ -206,7 +200,7 @@ class ProductivityApp(QWidget):
                 padding: 10px;
             }
             QListWidget::item:hover {
-                background: #4CAF50;
+                background: #F9CB43;
                 color: #FFFFFF;
             }
         """)
@@ -256,6 +250,22 @@ class ProductivityApp(QWidget):
         footer.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(footer)
 
+        # Logout button
+        logout_button = QPushButton("Logout", self)
+        logout_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FF5722;
+                color: white;
+                border-radius: 5px;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #F44336;
+            }
+        """)
+        logout_button.clicked.connect(self.logout)
+        main_layout.addWidget(logout_button)
+
         self.setLayout(main_layout)
         self.setStyleSheet("background-color: #212121;")
 
@@ -286,12 +296,12 @@ class ProductivityApp(QWidget):
         tasks = self.cursor.fetchall()
         for task in tasks:
             item = QListWidgetItem(task[1])
-            item.setData(Qt.UserRole, task[0])  # Store task ID in the item
-            if task[2]:  # If task is completed
+            item.setData(Qt.UserRole, task[0])
+            if task[2]:
                 item.setBackground(QColor("#4CAF50"))
                 item.setForeground(QColor("#FFFFFF"))
-            elif task[3]:  # If task is available
-                item.setBackground(QColor("#4CAF50"))  # Green color for available tasks
+            elif task[3]:
+                item.setBackground(QColor("#E52020"))
                 item.setForeground(QColor("#FFFFFF"))
             self.todo_list.addItem(item)
 
@@ -299,7 +309,7 @@ class ProductivityApp(QWidget):
         elapsed_time = int(time.time() - self.start_time)
         self.screen_time_label.setText(f"Screen Time: {elapsed_time // 60}m {elapsed_time % 60}s")
 
-        if elapsed_time % 3600 == 0:  # Notify every hour
+        if elapsed_time % 3600 == 0:
             notification.notify(
                 title="Screen Time Alert",
                 message="You've been working for an hour. Take a short break!",
@@ -315,60 +325,48 @@ class ProductivityApp(QWidget):
     def show_context_menu(self, position):
         item = self.todo_list.itemAt(position)
         if item:
+            task_id = item.data(Qt.UserRole)
+            self.cursor.execute('SELECT completed FROM tasks WHERE id = ?', (task_id,))
+            task_completed = self.cursor.fetchone()[0]
+
             menu = QMenu()
             edit_action = menu.addAction("Edit Task")
             delete_action = menu.addAction("Delete Task")
-            complete_action = menu.addAction("Mark as Complete")
-            restore_action = menu.addAction("Restore Task")
-            action = menu.exec_(self.todo_list.mapToGlobal(position))
-            if action == edit_action:
-                self.edit_task(item)
-            elif action == delete_action:
-                self.delete_task(item)
-            elif action == complete_action:
-                self.mark_task_complete(item)
-            elif action == restore_action:
-                self.restore_task(item)
 
-    def edit_task(self, item):
-        task_id = item.data(Qt.UserRole)
-        new_task, ok = QInputDialog.getText(self, "Edit Task", "Edit your task:", text=item.text())
-        if ok and new_task:
-            self.cursor.execute('UPDATE tasks SET task = ? WHERE id = ?', (new_task, task_id))
+            if task_completed:
+                mark_pending_action = menu.addAction("Mark as Pending")
+                mark_pending_action.triggered.connect(lambda: self.mark_task_pending(task_id))
+
+            action = menu.exec_(self.todo_list.mapToGlobal(position))
+
+            if action == edit_action:
+                self.edit_task(task_id)
+            elif action == delete_action:
+                self.delete_task(task_id)
+
+    def mark_task_pending(self, task_id):
+        self.cursor.execute('UPDATE tasks SET completed = 0 WHERE id = ?', (task_id,))
+        self.conn.commit()
+        self.load_tasks()
+
+    def edit_task(self, task_id):
+        task, ok = QInputDialog.getText(self, "Edit Task", "Edit the task:")
+        if ok and task:
+            self.cursor.execute('UPDATE tasks SET task = ? WHERE id = ?', (task, task_id))
             self.conn.commit()
             self.load_tasks()
 
-    def delete_task(self, item):
-        task_id = item.data(Qt.UserRole)
+    def delete_task(self, task_id):
         self.cursor.execute('UPDATE tasks SET is_available = 0 WHERE id = ?', (task_id,))
         self.conn.commit()
         self.load_tasks()
 
-    def mark_task_complete(self, item):
-        task_id = item.data(Qt.UserRole)
-        self.cursor.execute('UPDATE tasks SET completed = 1 WHERE id = ?', (task_id,))
-        self.conn.commit()
-        self.load_tasks()
-
-    def restore_task(self, item):
-        task_id = item.data(Qt.UserRole)
-        self.cursor.execute('UPDATE tasks SET is_available = 1 WHERE id = ?', (task_id,))
-        self.conn.commit()
-        self.load_tasks()
-
-    def view_deleted_tasks(self):
-        self.todo_list.clear()
-        self.cursor.execute('SELECT id, task, completed, is_available FROM tasks WHERE user_id = ? AND is_available = 0', (self.user_id,))
-        tasks = self.cursor.fetchall()
-        for task in tasks:
-            item = QListWidgetItem(task[1])
-            item.setData(Qt.UserRole, task[0])  # Store task ID in the item
-            item.setBackground(QColor("#FF0000"))  # Red color for deleted tasks
-            item.setForeground(QColor("#FFFFFF"))
-            self.todo_list.addItem(item)
+    def logout(self):
+        self.close()
+        self.init_ui()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = LoginRegisterApp()
     window.show()

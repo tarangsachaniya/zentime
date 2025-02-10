@@ -16,7 +16,7 @@ from pymongo import MongoClient
 class LoginRegisterApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Smart Productivity App")
+        self.setWindowTitle("ZenTime")
         self.setGeometry(200, 200, 500, 400)
 
         # Initialize MongoDB
@@ -149,14 +149,14 @@ class ProductivityApp(QWidget):
         # Add header
         header = QLabel("Productivity Dashboard", self)
         header.setFont(QFont("Arial", 16, QFont.Bold))
-        header.setStyleSheet("color: #4CAF50; text-align: center;")
+        header.setStyleSheet("color: #4CAF50; text-align: center; background-color:none")
         header.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header)
 
         # Screen time section
         self.screen_time_label = QLabel("Screen Time: 0s", self)
         self.screen_time_label.setFont(QFont("Arial", 12))
-        self.screen_time_label.setStyleSheet("color: #FFFFFF; padding: 10px;")
+        self.screen_time_label.setStyleSheet("color:rgb(7, 2, 2); padding: 10px;background-color: none;")
         self.screen_time_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.screen_time_label)
 
@@ -176,7 +176,7 @@ class ProductivityApp(QWidget):
         self.todo_list.setFont(QFont("Arial", 10))
         self.todo_list.setStyleSheet("""
             QListWidget {
-                background: #303030;
+                # background: #303030;
                 color: #FFFFFF;
                 padding: 10px;
                 border-radius: 5px;
@@ -212,7 +212,7 @@ class ProductivityApp(QWidget):
         # Quick access tools section
         tools_header = QLabel("Quick Access Tools", self)
         tools_header.setFont(QFont("Arial", 14, QFont.Bold))
-        tools_header.setStyleSheet("color: #FF9800; padding-top: 15px;")
+        tools_header.setStyleSheet("color: #FF9800; padding-top: 15px;background-color: none;")
         main_layout.addWidget(tools_header)
 
         tools_layout = QHBoxLayout()
@@ -231,7 +231,7 @@ class ProductivityApp(QWidget):
         # Footer Section
         footer = QLabel("Stay productive and focused!", self)
         footer.setFont(QFont("Arial", 10, QFont.StyleItalic))
-        footer.setStyleSheet("color: #BDBDBD; text-align: center; padding-top: 20px;")
+        footer.setStyleSheet("color: #BDBDBD; text-align: center; padding-top: 20px;background-color: none")
         footer.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(footer)
 
@@ -252,7 +252,7 @@ class ProductivityApp(QWidget):
         main_layout.addWidget(logout_button)
 
         self.setLayout(main_layout)
-        self.setStyleSheet("background-color: #212121;")
+        # self.setStyleSheet("background-color:rgb(251, 250, 250);")
 
     def style_button(self, color):
         return f"""
@@ -315,7 +315,10 @@ class ProductivityApp(QWidget):
             edit_action = menu.addAction("Edit Task")
             delete_action = menu.addAction("Delete Task")
 
-            if task['completed']:
+            if not task['completed']:
+                mark_complete_action = menu.addAction("Mark as Complete")
+                mark_complete_action.triggered.connect(lambda: self.mark_task_complete(task_id))
+            else:
                 mark_pending_action = menu.addAction("Mark as Pending")
                 mark_pending_action.triggered.connect(lambda: self.mark_task_pending(task_id))
 
@@ -326,15 +329,28 @@ class ProductivityApp(QWidget):
             elif action == delete_action:
                 self.delete_task(task_id)
 
+    def mark_task_complete(self, task_id):
+        self.tasks.update_one({'_id': task_id}, {'$set': {'completed': True}})
+        self.load_tasks()
+
     def mark_task_pending(self, task_id):
         self.tasks.update_one({'_id': task_id}, {'$set': {'completed': False}})
         self.load_tasks()
 
     def edit_task(self, task_id):
-        task, ok = QInputDialog.getText(self, "Edit Task", "Edit the task:")
-        if ok and task:
-            self.tasks.update_one({'_id': task_id}, {'$set': {'task': task}})
-            self.load_tasks()
+        dialog = QInputDialog(self)
+        dialog.setStyleSheet("background-color: #424242; color: #FFFFFF;")
+        dialog.setWindowTitle("Edit Task")
+        dialog.setLabelText("Edit the task:")
+        dialog.setTextValue(self.tasks.find_one({'_id': task_id})['task'])
+        dialog.setOkButtonText("Save")
+        dialog.setCancelButtonText("Cancel")
+
+        if dialog.exec_() == QInputDialog.Accepted:
+            task = dialog.textValue()
+            if task:
+                self.tasks.update_one({'_id': task_id}, {'$set': {'task': task}})
+                self.load_tasks()
 
     def delete_task(self, task_id):
         self.tasks.update_one({'_id': task_id}, {'$set': {'is_available': False}})

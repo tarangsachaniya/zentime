@@ -3,12 +3,15 @@ import time
 import sqlite3
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QPushButton, QListWidget,
-    QLineEdit, QLabel, QWidget, QHBoxLayout, QStackedWidget, QMessageBox
+    QLineEdit, QLabel, QWidget, QHBoxLayout, QStackedWidget, QMessageBox,
+    QListWidgetItem, QInputDialog, QMenu
 )
 from PyQt5.QtGui import QFont, QIcon, QColor, QPalette
 from PyQt5.QtCore import QTimer, Qt
 from plyer import notification
 import psutil
+import webbrowser
+import os
 
 
 class LoginRegisterApp(QMainWindow):
@@ -100,6 +103,7 @@ class LoginRegisterApp(QMainWindow):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 task TEXT NOT NULL,
+                completed BOOLEAN DEFAULT 0,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         ''')
@@ -137,6 +141,7 @@ class LoginRegisterApp(QMainWindow):
             QMessageBox.warning(self, "Registration Failed", "Username already exists")
 
     def show_productivity_app(self):
+        # Always show the productivity app, regardless of whether tasks exist or not
         self.productivity_app = ProductivityApp(self.user_id, self.conn)
         self.setCentralWidget(self.productivity_app)
 
@@ -204,6 +209,8 @@ class ProductivityApp(QWidget):
                 color: #FFFFFF;
             }
         """)
+        self.todo_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.todo_list.customContextMenuRequested.connect(self.show_context_menu)
         main_layout.addWidget(self.todo_list)
 
         add_button = QPushButton("Add Task", self)
@@ -269,14 +276,20 @@ class ProductivityApp(QWidget):
         if task:
             self.cursor.execute('INSERT INTO tasks (user_id, task) VALUES (?, ?)', (self.user_id, task))
             self.conn.commit()
-            self.todo_list.addItem(task)
+            self.load_tasks()
             self.todo_input.clear()
 
     def load_tasks(self):
-        self.cursor.execute('SELECT task FROM tasks WHERE user_id = ?', (self.user_id,))
+        self.todo_list.clear()
+        self.cursor.execute('SELECT id, task, completed FROM tasks WHERE user_id = ?', (self.user_id,))
         tasks = self.cursor.fetchall()
         for task in tasks:
-            self.todo_list.addItem(task[0])
+            item = QListWidgetItem(task[1])
+            item.setData(Qt.UserRole, task[0])  # Store task ID in the item
+            if task[2]:  # If task is completed
+                item.setBackground(QColor("#4CAF50"))
+                item.setForeground(QColor("#FFFFFF"))
+            self.todo_list.addItem(item)
 
     def update_screen_time(self):
         elapsed_time = int(time.time() - self.start_time)
@@ -290,12 +303,45 @@ class ProductivityApp(QWidget):
             )
 
     def open_browser(self):
-        import webbrowser
         webbrowser.open("https://www.google.com")
 
     def open_notepad(self):
-        import os
         os.system("notepad.exe")
+
+    def show_context_menu(self, position):
+        item = self.todo_list.itemAt(position)
+        if item:
+            menu = QMenu()
+            edit_action = menu.addAction("Edit Task")
+            delete_action = menu.addAction("Delete Task")
+            complete_action = menu.addAction("Mark as Complete")
+            action = menu.exec_(self.todo_list.mapToGlobal(position))
+            if action == edit_action:
+                self.edit_task(item)
+            elif action == delete_action:
+                self.delete_task(item)
+            elif action == complete_action:
+                self.mark_task_complete(item)
+
+    def edit_task(self, item):
+        task_id = item.data(Qt.UserRole)
+        new_task, ok = QInputDialog.getText(self, "Edit Task", "Edit your task:", text=item.text())
+        if ok and new_task:
+            self.cursor.execute('UPDATE tasks SET task = ? WHERE id = ?', (new_task, task_id))
+            self.conn.commit()
+            self.load_tasks()
+
+    def delete_task(self, item):
+        task_id = item.data(Qt.UserRole)
+        self.cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
+        self.conn.commit()
+        self.load_tasks()
+
+    def mark_task_complete(self, item):
+        task_id = item.data(Qt.UserRole)
+        self.cursor.execute('UPDATE tasks SET completed = 1 WHERE id = ?', (task_id,))
+        self.conn.commit()
+        self.load_tasks()
 
 
 if __name__ == "__main__":

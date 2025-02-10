@@ -1,17 +1,16 @@
 import sys
 import time
-import sqlite3
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QPushButton, QListWidget,
     QLineEdit, QLabel, QWidget, QHBoxLayout, QStackedWidget, QMessageBox,
     QListWidgetItem, QInputDialog, QMenu
 )
-from PyQt5.QtGui import QFont, QIcon, QColor, QPalette
+from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtCore import QTimer, Qt
 from plyer import notification
-import psutil
 import webbrowser
 import os
+from pymongo import MongoClient
 
 
 class LoginRegisterApp(QMainWindow):
@@ -20,7 +19,7 @@ class LoginRegisterApp(QMainWindow):
         self.setWindowTitle("Smart Productivity App")
         self.setGeometry(200, 200, 500, 400)
 
-        # Initialize database
+        # Initialize MongoDB
         self.init_db()
 
         # Main layout
@@ -89,22 +88,10 @@ class LoginRegisterApp(QMainWindow):
         self.show_login_ui()
 
     def init_db(self):
-        self.conn = sqlite3.connect('productivity_app.db')
-        self.cursor = self.conn.cursor()
-        self.cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )''')
-        self.cursor.execute('''CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            task TEXT NOT NULL,
-            completed BOOLEAN DEFAULT 0,
-            is_available BOOLEAN DEFAULT 1, 
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )''')
-        self.conn.commit()
+        self.client = MongoClient('mongodb+srv://lfa:lfaDB@cluster0.zdjyw.mongodb.net/')
+        self.db = self.client['productivity_app']
+        self.users = self.db['users']
+        self.tasks = self.db['tasks']
 
     def show_login_ui(self):
         self.stacked_widget.setCurrentIndex(0)
@@ -116,11 +103,10 @@ class LoginRegisterApp(QMainWindow):
         username = self.login_username.text()
         password = self.login_password.text()
 
-        self.cursor.execute('SELECT id FROM users WHERE username = ? AND password = ?', (username, password))
-        user = self.cursor.fetchone()
+        user = self.users.find_one({'username': username, 'password': password})
 
         if user:
-            self.user_id = user[0]
+            self.user_id = user['_id']
             self.show_productivity_app()
         else:
             QMessageBox.warning(self, "Login Failed", "Invalid username or password")
@@ -129,25 +115,24 @@ class LoginRegisterApp(QMainWindow):
         username = self.register_username.text()
         password = self.register_password.text()
 
-        try:
-            self.cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-            self.conn.commit()
+        if self.users.find_one({'username': username}):
+            QMessageBox.warning(self, "Registration Failed", "Username already exists")
+        else:
+            user_id = self.users.insert_one({'username': username, 'password': password}).inserted_id
             QMessageBox.information(self, "Registration Successful", "You can now login with your credentials")
             self.show_login_ui()
-        except sqlite3.IntegrityError:
-            QMessageBox.warning(self, "Registration Failed", "Username already exists")
 
     def show_productivity_app(self):
-        self.productivity_app = ProductivityApp(self.user_id, self.conn)
+        self.productivity_app = ProductivityApp(self.user_id, self.db)
         self.setCentralWidget(self.productivity_app)
 
 
 class ProductivityApp(QWidget):
-    def __init__(self, user_id, conn):
+    def __init__(self, user_id, db):
         super().__init__()
         self.user_id = user_id
-        self.conn = conn
-        self.cursor = self.conn.cursor()
+        self.db = db
+        self.tasks = self.db['tasks']
         self.start_time = time.time()
 
         self.init_ui()
@@ -285,22 +270,20 @@ class ProductivityApp(QWidget):
     def add_task(self):
         task = self.todo_input.text()
         if task:
-            self.cursor.execute('INSERT INTO tasks (user_id, task) VALUES (?, ?)', (self.user_id, task))
-            self.conn.commit()
+            self.tasks.insert_one({'user_id': self.user_id, 'task': task, 'completed': False, 'is_available': True})
             self.load_tasks()
             self.todo_input.clear()
 
     def load_tasks(self):
         self.todo_list.clear()
-        self.cursor.execute('SELECT id, task, completed, is_available FROM tasks WHERE user_id = ? AND is_available = 1', (self.user_id,))
-        tasks = self.cursor.fetchall()
+        tasks = self.tasks.find({'user_id': self.user_id, 'is_available': True})
         for task in tasks:
-            item = QListWidgetItem(task[1])
-            item.setData(Qt.UserRole, task[0])
-            if task[2]:
+            item = QListWidgetItem(task['task'])
+            item.setData(Qt.UserRole, task['_id'])
+            if task['completed']:
                 item.setBackground(QColor("#4CAF50"))
                 item.setForeground(QColor("#FFFFFF"))
-            elif task[3]:
+            elif task['is_available']:
                 item.setBackground(QColor("#E52020"))
                 item.setForeground(QColor("#FFFFFF"))
             self.todo_list.addItem(item)
@@ -326,14 +309,13 @@ class ProductivityApp(QWidget):
         item = self.todo_list.itemAt(position)
         if item:
             task_id = item.data(Qt.UserRole)
-            self.cursor.execute('SELECT completed FROM tasks WHERE id = ?', (task_id,))
-            task_completed = self.cursor.fetchone()[0]
+            task = self.tasks.find_one({'_id': task_id})
 
             menu = QMenu()
             edit_action = menu.addAction("Edit Task")
             delete_action = menu.addAction("Delete Task")
 
-            if task_completed:
+            if task['completed']:
                 mark_pending_action = menu.addAction("Mark as Pending")
                 mark_pending_action.triggered.connect(lambda: self.mark_task_pending(task_id))
 
@@ -345,25 +327,21 @@ class ProductivityApp(QWidget):
                 self.delete_task(task_id)
 
     def mark_task_pending(self, task_id):
-        self.cursor.execute('UPDATE tasks SET completed = 0 WHERE id = ?', (task_id,))
-        self.conn.commit()
+        self.tasks.update_one({'_id': task_id}, {'$set': {'completed': False}})
         self.load_tasks()
 
     def edit_task(self, task_id):
         task, ok = QInputDialog.getText(self, "Edit Task", "Edit the task:")
         if ok and task:
-            self.cursor.execute('UPDATE tasks SET task = ? WHERE id = ?', (task, task_id))
-            self.conn.commit()
+            self.tasks.update_one({'_id': task_id}, {'$set': {'task': task}})
             self.load_tasks()
 
     def delete_task(self, task_id):
-        self.cursor.execute('UPDATE tasks SET is_available = 0 WHERE id = ?', (task_id,))
-        self.conn.commit()
+        self.tasks.update_one({'_id': task_id}, {'$set': {'is_available': False}})
         self.load_tasks()
 
     def logout(self):
         self.close()
-        self.init_ui()
 
 
 if __name__ == '__main__':

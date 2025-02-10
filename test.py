@@ -104,6 +104,7 @@ class LoginRegisterApp(QMainWindow):
                 user_id INTEGER NOT NULL,
                 task TEXT NOT NULL,
                 completed BOOLEAN DEFAULT 0,
+                is_available BOOLEAN DEFAULT 1,  -- New field for soft delete
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         ''')
@@ -281,13 +282,16 @@ class ProductivityApp(QWidget):
 
     def load_tasks(self):
         self.todo_list.clear()
-        self.cursor.execute('SELECT id, task, completed FROM tasks WHERE user_id = ?', (self.user_id,))
+        self.cursor.execute('SELECT id, task, completed, is_available FROM tasks WHERE user_id = ? AND is_available = 1', (self.user_id,))
         tasks = self.cursor.fetchall()
         for task in tasks:
             item = QListWidgetItem(task[1])
             item.setData(Qt.UserRole, task[0])  # Store task ID in the item
             if task[2]:  # If task is completed
                 item.setBackground(QColor("#4CAF50"))
+                item.setForeground(QColor("#FFFFFF"))
+            elif task[3]:  # If task is available
+                item.setBackground(QColor("#4CAF50"))  # Green color for available tasks
                 item.setForeground(QColor("#FFFFFF"))
             self.todo_list.addItem(item)
 
@@ -315,6 +319,7 @@ class ProductivityApp(QWidget):
             edit_action = menu.addAction("Edit Task")
             delete_action = menu.addAction("Delete Task")
             complete_action = menu.addAction("Mark as Complete")
+            restore_action = menu.addAction("Restore Task")
             action = menu.exec_(self.todo_list.mapToGlobal(position))
             if action == edit_action:
                 self.edit_task(item)
@@ -322,6 +327,8 @@ class ProductivityApp(QWidget):
                 self.delete_task(item)
             elif action == complete_action:
                 self.mark_task_complete(item)
+            elif action == restore_action:
+                self.restore_task(item)
 
     def edit_task(self, item):
         task_id = item.data(Qt.UserRole)
@@ -333,7 +340,7 @@ class ProductivityApp(QWidget):
 
     def delete_task(self, item):
         task_id = item.data(Qt.UserRole)
-        self.cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
+        self.cursor.execute('UPDATE tasks SET is_available = 0 WHERE id = ?', (task_id,))
         self.conn.commit()
         self.load_tasks()
 
@@ -342,6 +349,23 @@ class ProductivityApp(QWidget):
         self.cursor.execute('UPDATE tasks SET completed = 1 WHERE id = ?', (task_id,))
         self.conn.commit()
         self.load_tasks()
+
+    def restore_task(self, item):
+        task_id = item.data(Qt.UserRole)
+        self.cursor.execute('UPDATE tasks SET is_available = 1 WHERE id = ?', (task_id,))
+        self.conn.commit()
+        self.load_tasks()
+
+    def view_deleted_tasks(self):
+        self.todo_list.clear()
+        self.cursor.execute('SELECT id, task, completed, is_available FROM tasks WHERE user_id = ? AND is_available = 0', (self.user_id,))
+        tasks = self.cursor.fetchall()
+        for task in tasks:
+            item = QListWidgetItem(task[1])
+            item.setData(Qt.UserRole, task[0])  # Store task ID in the item
+            item.setBackground(QColor("#FF0000"))  # Red color for deleted tasks
+            item.setForeground(QColor("#FFFFFF"))
+            self.todo_list.addItem(item)
 
 
 if __name__ == "__main__":

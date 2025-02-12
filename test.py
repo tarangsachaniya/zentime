@@ -13,6 +13,12 @@ import os
 from pymongo import MongoClient
 
 
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QMessageBox
+from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
+from pymongo import MongoClient
+import re
+
 class LoginRegisterApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,25 +37,29 @@ class LoginRegisterApp(QMainWindow):
         self.login_layout = QVBoxLayout()
         self.login_ui.setLayout(self.login_layout)
 
-        self.login_label = QLabel("Login", self)
+        self.login_label = QLabel("Login into ZenTime", self)
         self.login_label.setFont(QFont("Arial", 16, QFont.Bold))
         self.login_label.setAlignment(Qt.AlignCenter)
         self.login_layout.addWidget(self.login_label)
 
         self.login_username = QLineEdit(self)
-        self.login_username.setPlaceholderText("Username")
+        self.login_username.setPlaceholderText("Enter Username")
+        self.login_username.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color:none; }")
         self.login_layout.addWidget(self.login_username)
 
         self.login_password = QLineEdit(self)
-        self.login_password.setPlaceholderText("Password")
+        self.login_password.setPlaceholderText("Enter Password")
         self.login_password.setEchoMode(QLineEdit.Password)
+        self.login_password.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color: #none; }")
         self.login_layout.addWidget(self.login_password)
 
         self.login_button = QPushButton("Login", self)
+        self.login_button.setStyleSheet("QPushButton { padding: 10px; background-color: #4CAF50; color: white; border: none; }")
         self.login_button.clicked.connect(self.login)
         self.login_layout.addWidget(self.login_button)
 
         self.register_button = QPushButton("Register", self)
+        self.register_button.setStyleSheet("QPushButton { background-color: transparent; color: blue; text-decoration: underline; border: none; }")
         self.register_button.clicked.connect(self.show_register_ui)
         self.login_layout.addWidget(self.register_button)
 
@@ -58,25 +68,29 @@ class LoginRegisterApp(QMainWindow):
         self.register_layout = QVBoxLayout()
         self.register_ui.setLayout(self.register_layout)
 
-        self.register_label = QLabel("Register", self)
+        self.register_label = QLabel("Register Into ZenTime", self)
         self.register_label.setFont(QFont("Arial", 16, QFont.Bold))
         self.register_label.setAlignment(Qt.AlignCenter)
         self.register_layout.addWidget(self.register_label)
 
         self.register_username = QLineEdit(self)
-        self.register_username.setPlaceholderText("Username")
+        self.register_username.setPlaceholderText("Enter Username")
+        self.register_username.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color: none; }")
         self.register_layout.addWidget(self.register_username)
 
         self.register_password = QLineEdit(self)
-        self.register_password.setPlaceholderText("Password")
+        self.register_password.setPlaceholderText("Enter Password")
         self.register_password.setEchoMode(QLineEdit.Password)
+        self.register_password.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color: none; }")
         self.register_layout.addWidget(self.register_password)
 
         self.register_button_confirm = QPushButton("Register", self)
+        self.register_button_confirm.setStyleSheet("QPushButton { padding: 10px; background-color: #4CAF50; color: white; border: none; }")
         self.register_button_confirm.clicked.connect(self.register)
         self.register_layout.addWidget(self.register_button_confirm)
 
         self.back_to_login_button = QPushButton("Back to Login", self)
+        self.back_to_login_button.setStyleSheet("QPushButton { background-color: transparent; color: blue; text-decoration: underline; border: none; }")
         self.back_to_login_button.clicked.connect(self.show_login_ui)
         self.register_layout.addWidget(self.back_to_login_button)
 
@@ -88,7 +102,7 @@ class LoginRegisterApp(QMainWindow):
         self.show_login_ui()
 
     def init_db(self):
-        self.client = MongoClient('mongodb+srv://lfa:lfaDB@cluster0.zdjyw.mongodb.net/')
+        self.client = MongoClient('mongodb+srv://taranggajjar829:SuKCplTEmLBZdZeO@innovation.c8s8a.mongodb.net/')
         self.db = self.client['productivity_app']
         self.users = self.db['users']
         self.tasks = self.db['tasks']
@@ -118,9 +132,26 @@ class LoginRegisterApp(QMainWindow):
         if self.users.find_one({'username': username}):
             QMessageBox.warning(self, "Registration Failed", "Username already exists")
         else:
+            if not self.validate_password(password):
+                QMessageBox.warning(self, "Registration Failed", "Password must be at least 6 characters long and contain a mixture of special characters, uppercase letters, lowercase letters, and digits.")
+                return
+
             user_id = self.users.insert_one({'username': username, 'password': password}).inserted_id
             QMessageBox.information(self, "Registration Successful", "You can now login with your credentials")
             self.show_login_ui()
+
+    def validate_password(self, password):
+        if len(password) < 6:
+            return False
+        if not re.search(r'[A-Z]', password):
+            return False
+        if not re.search(r'[a-z]', password):
+            return False
+        if not re.search(r'[0-9]', password):
+            return False
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            return False
+        return True
 
     def show_productivity_app(self):
         self.productivity_app = ProductivityApp(self.user_id, self.db)

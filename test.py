@@ -48,7 +48,7 @@ class LoginRegisterApp(QMainWindow):
         self.login_password = QLineEdit(self)
         self.login_password.setPlaceholderText("Enter Password")
         self.login_password.setEchoMode(QLineEdit.Password)
-        self.login_password.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color: #none; }")
+        self.login_password.setStyleSheet("QLineEdit { padding: 10px; width: 300px; background-color: none; }")
         self.login_layout.addWidget(self.login_password)
 
         self.login_button = QPushButton("Login", self)
@@ -263,7 +263,7 @@ class ProductivityApp(QWidget):
         # Footer Section
         footer = QLabel("Stay productive and focused!", self)
         footer.setFont(QFont("Arial", 10, QFont.StyleItalic))
-        footer.setStyleSheet("color: #BDBDBD; text-align: center; padding-top: 20px;background-color: none")
+        footer.setStyleSheet("color: #0d1b2a; text-align: center; padding-top: 20px;background-color: none;")
         footer.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(footer)
 

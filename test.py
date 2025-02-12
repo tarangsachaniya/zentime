@@ -11,13 +11,11 @@ from plyer import notification
 import webbrowser
 import os
 from pymongo import MongoClient
-
-
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QMessageBox
-from PyQt5.QtGui import QFont
-from PyQt5.QtCore import Qt
-from pymongo import MongoClient
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class LoginRegisterApp(QMainWindow):
     def __init__(self):
@@ -102,7 +100,10 @@ class LoginRegisterApp(QMainWindow):
         self.show_login_ui()
 
     def init_db(self):
-        self.client = MongoClient('mongodb+srv://taranggajjar829:SuKCplTEmLBZdZeO@innovation.c8s8a.mongodb.net/')
+        mongodb_url = os.getenv("MONGODB_URL")
+        if not mongodb_url:
+            raise ValueError("MONGODB_URL not found in .env file")
+        self.client = MongoClient(mongodb_url)
         self.db = self.client['productivity_app']
         self.users = self.db['users']
         self.tasks = self.db['tasks']

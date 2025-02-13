@@ -284,7 +284,6 @@ class ProductivityApp(QWidget):
         main_layout.addWidget(logout_button)
 
         self.setLayout(main_layout)
-        # self.setStyleSheet("background-color:rgb(251, 250, 250);")
 
     def style_button(self, color):
         return f"""
@@ -390,13 +389,15 @@ class ProductivityApp(QWidget):
 
     def logout(self):
         self.close()
-        self.parent().show_login_ui()
+        # Reinitialize the LoginRegisterApp window
+        self.login_window = LoginRegisterApp()
+        self.login_window.show()
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     # Set the application icon (favicon)
-    app.setWindowIcon(QIcon('logo.jpg'))  # Ensure you have a favicon.ico file in the same directory
+    app.setWindowIcon(QIcon('favicon.ico'))  # Ensure you have a favicon.ico file in the same directory
     window = LoginRegisterApp()
     window.show()
     sys.exit(app.exec_())

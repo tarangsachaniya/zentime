@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QLineEdit, QLabel, QWidget, QHBoxLayout, QStackedWidget, QMessageBox,
     QListWidgetItem, QInputDialog, QMenu
 )
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QFont, QColor, QIcon
 from PyQt5.QtCore import QTimer, Qt
 from plyer import notification
 import webbrowser
@@ -371,9 +371,9 @@ class ProductivityApp(QWidget):
 
     def edit_task(self, task_id):
         dialog = QInputDialog(self)
-        dialog.setStyleSheet("background-color: #424242; color: #FFFFFF;")
+        dialog.setStyleSheet("background-color:none; color: #424242;")
         dialog.setWindowTitle("Edit Task")
-        dialog.setLabelText("Edit the task:")
+        dialog.setLabelText("Edit the task")
         dialog.setTextValue(self.tasks.find_one({'_id': task_id})['task'])
         dialog.setOkButtonText("Save")
         dialog.setCancelButtonText("Cancel")
@@ -390,10 +390,13 @@ class ProductivityApp(QWidget):
 
     def logout(self):
         self.close()
+        self.parent().show_login_ui()
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    # Set the application icon (favicon)
+    app.setWindowIcon(QIcon('logo.jpg'))  # Ensure you have a favicon.ico file in the same directory
     window = LoginRegisterApp()
     window.show()
     sys.exit(app.exec_())

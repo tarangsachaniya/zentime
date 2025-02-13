@@ -22,8 +22,8 @@ class LoginRegisterApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("ZenTime")
         self.setGeometry(200, 200, 500, 400)
+        self.setWindowIcon(QIcon('logo.jpg')) 
 
-        # Initialize MongoDB
         self.init_db()
 
         # Main layout
@@ -396,8 +396,8 @@ class ProductivityApp(QWidget):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # Set the application icon (favicon)
-    app.setWindowIcon(QIcon('favicon.ico'))  # Ensure you have a favicon.ico file in the same directory
+    # Set the application icon (logo) for all windows and dialogs
+    app.setWindowIcon(QIcon('logo.jpg')) 
     window = LoginRegisterApp()
     window.show()
     sys.exit(app.exec_())
